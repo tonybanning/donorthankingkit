@@ -1,8 +1,8 @@
 # Donation Thanking Kit
 > (This same read me file will also be included with the download btw)
 
-Turns a messy donation spreadsheet into a personal thank-you email for every
-donor — and then stops, and lets **you** press Send.
+Turns a messy donation spreadsheet into a personal thank you letter ready
+to be reviewed and sent by you optimized for any emailing service. :)
 
 **It is free.** No API key, no account, no internet, no cost. It runs on your own
 computer and your donor list never leaves it.
