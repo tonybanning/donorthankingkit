@@ -1,1 +1,0 @@
-"""Donation acknowledgment pipeline stages."""
