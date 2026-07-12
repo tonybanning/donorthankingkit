@@ -1,4 +1,4 @@
-# Donation Thank-You Tool
+# Donation Thanking Kit
 > (This same read me file will also be included with the download btw)
 
 Turns a messy donation spreadsheet into a personal thank-you email for every
