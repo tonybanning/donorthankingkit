@@ -1,4 +1,4 @@
-# Donation Thank-You Tool
+# Donation Thanking Kit
 
 Turns a messy donation spreadsheet into a personal thank-you email for every
 donor — and then stops, and lets **you** press Send.
