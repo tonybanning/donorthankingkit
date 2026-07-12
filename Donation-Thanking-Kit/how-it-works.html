@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the Donation Thank-You Tool works</title>
+<meta name="description" content="A free tool that turns a messy donation list into personal thank-you emails - and always leaves the Send to you.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, ul, ol, li { margin: 0; padding: 0; }
+  ul, ol { list-style: none; }
+  button { font: inherit; }
+
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --fg: #1e2430;
+    --muted: #667085;
+    --line: #d9dde4;
+    --blue: #1a73e8;
+    --ok: #2e7d5b;
+    --warn: #b47818;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --card: #1d222b; --fg: #e6e9ee; --muted: #9aa3b2;
+      --line: #333a46; --blue: #6ba5f5; --ok: #57b98d; --warn: #d9a445;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#14171d; --card:#1d222b; --fg:#e6e9ee; --muted:#9aa3b2;
+    --line:#333a46; --blue:#6ba5f5; --ok:#57b98d; --warn:#d9a445;
+  }
+  :root[data-theme="light"] {
+    --bg:#f4f5f7; --card:#ffffff; --fg:#1e2430; --muted:#667085;
+    --line:#d9dde4; --blue:#1a73e8; --ok:#2e7d5b; --warn:#b47818;
+  }
+
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  .wrap { width: min(820px, 100% - 2.5rem); margin-inline: auto; }
+  header { padding: 3rem 0 2rem; }
+  h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); line-height: 1.2; }
+  h2 { font-size: 1.25rem; margin-bottom: .75rem; }
+  p { color: var(--muted); max-width: 60ch; }
+  header p { font-size: 1.1rem; margin-top: .6rem; }
+  section { padding-bottom: 3rem; }
+
+  .tag {
+    display: inline-block; font-size: .8rem; color: var(--ok);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: .2rem .7rem; margin-bottom: 1rem;
+  }
+
+  /* --- step rail (clickable) --- */
+  .steps { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .steps li { flex: 1 1 110px; }
+  .steps button {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    background: none; border: none; border-top: 3px solid var(--line);
+    padding: .4rem 0; font-size: .78rem; color: var(--muted);
+    transition: color .3s, border-color .3s;
+  }
+  .steps button:hover { color: var(--fg); }
+  .steps button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .steps li.on button { color: var(--fg); border-color: var(--blue); font-weight: 600; }
+  .steps li.done button { border-color: var(--ok); }
+
+  .stage {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1.25rem; min-height: 340px;
+  }
+  .panel { display: none; }
+  .panel.on { display: block; animation: fade .3s ease-out both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  .caption { font-size: .85rem; color: var(--muted); margin-bottom: .9rem; }
+
+  /* sheet */
+  table { width: 100%; border-collapse: collapse;
+          font-family: ui-monospace, Consolas, monospace; font-size: .82rem; }
+  th { text-align: left; font-size: .7rem; text-transform: uppercase;
+       letter-spacing: .06em; color: var(--muted); font-weight: 500;
+       padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
+  td { padding: .45rem .5rem; border-bottom: 1px solid var(--line);
+       transition: background .3s; }
+  tr.gone { display: none; }
+  td.fixed { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  tr.flag td { background: color-mix(in srgb, var(--warn) 16%, transparent); }
+  .pill { font-family: system-ui, sans-serif; font-size: .65rem;
+          text-transform: uppercase; padding: .05rem .35rem;
+          border-radius: 3px; margin-left: .35rem; }
+  .pill.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+  .pill.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  .flagnote { margin-top: .9rem; font-size: .85rem; color: var(--muted);
+              border-left: 3px solid var(--warn); padding: .5rem .8rem; }
+
+  /* letter */
+  .letter {
+    border: 1px solid var(--line); border-radius: 6px; padding: 1.5rem;
+    max-width: 420px; margin-inline: auto; font-family: Georgia, serif;
+    font-size: .92rem;
+  }
+  .letter .logo {
+    width: 34px; height: 34px; margin: 0 auto .4rem; border-radius: 50%;
+    background: var(--blue); color: #fff; display: grid; place-items: center;
+    font-weight: 700; font-size: .9rem; font-family: system-ui, sans-serif;
+  }
+  .letter .head { text-align: center; margin-bottom: 1rem; }
+  .letter .org { font-weight: 700; }
+  .letter .slogan { font-size: .78rem; font-style: italic; color: var(--muted); }
+  .letter p { color: var(--fg); margin-bottom: .7rem; max-width: none; }
+
+  /* send page mock */
+  .sendrow {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: .7rem .9rem; margin-bottom: .5rem; font-size: .9rem;
+    transition: border-color .3s, box-shadow .3s;
+  }
+  .sendrow .who { flex: 1 1 160px; }
+  .sendrow .em { color: var(--muted); font-size: .82rem; }
+  .btn-blue {
+    background: var(--blue); color: #fff; border: none; border-radius: 4px;
+    padding: .45rem .9rem; font-size: .85rem; cursor: pointer;
+  }
+  .btn-blue:disabled { opacity: .55; cursor: default; }
+  .sendrow.active { border-color: var(--blue);
+                    box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent); }
+
+  /* compose mock */
+  .compose {
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    max-width: 470px; margin: 0 auto; background: var(--card);
+    box-shadow: 0 10px 30px -18px rgba(0,0,0,.5);
+  }
+  .compose .bar {
+    background: #404040; color: #fff; padding: .5rem .8rem; font-size: .8rem;
+    display: flex; justify-content: space-between;
+  }
+  .compose .f {
+    display: flex; gap: .5rem; padding: .5rem .8rem;
+    border-bottom: 1px solid var(--line); font-size: .85rem; min-height: 2.1rem;
+  }
+  .compose .f .k { color: var(--muted); width: 3.5rem; flex: none; }
+  .filled { animation: pop .35s ease-out both; }
+  @keyframes pop { from { background: color-mix(in srgb, var(--ok) 30%, transparent); } }
+  .compose .msg {
+    padding: .8rem; min-height: 140px; font-family: Georgia, serif; font-size: .85rem;
+  }
+  .compose .msg .empty { color: var(--muted); font-family: system-ui, sans-serif;
+                         font-size: .82rem; }
+  .compose .msg .mini-logo {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--blue);
+    color: #fff; display: grid; place-items: center; font-size: .7rem;
+    font-weight: 700; margin: 0 auto .3rem; font-family: system-ui, sans-serif;
+  }
+  .compose .foot { padding: .6rem .8rem; border-top: 1px solid var(--line); }
+  .keys { display: block; margin-top: .8rem; font-size: .8rem; color: var(--muted); }
+  kbd {
+    font-family: ui-monospace, Consolas, monospace; font-size: .78rem;
+    border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 4px; padding: .1rem .4rem; background: var(--bg);
+  }
+
+  /* gate */
+  .sent-msg { text-align: center; padding: 2rem 1rem; }
+  .sent-msg .check {
+    width: 46px; height: 46px; margin: 0 auto 1rem; border-radius: 50%;
+    background: var(--ok); color: #fff; display: grid; place-items: center;
+    font-size: 1.4rem; animation: pop2 .4s cubic-bezier(.2,1.5,.4,1) both;
+  }
+  @keyframes pop2 { from { transform: scale(0); } }
+  .sent-msg h3 { font-size: 1.15rem; margin-bottom: .4rem; }
+  .sent-msg p { margin-inline: auto; }
+
+  /* controls */
+  .controls {
+    margin-top: 1rem; display: flex; gap: .5rem; align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn-plain {
+    background: none; border: 1px solid var(--line); color: inherit;
+    padding: .4rem .9rem; border-radius: 4px; cursor: pointer; font-size: .88rem;
+  }
+  .btn-plain:hover:not(:disabled) { border-color: var(--fg); }
+  .btn-plain:disabled { opacity: .4; cursor: default; }
+  .btn-plain:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .status { font-size: .85rem; color: var(--muted); margin-left: .3rem; }
+  .status.hand-off { color: var(--ok); font-weight: 600; }
+
+  /* lists */
+  .facts li, .howto li {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1rem 1.1rem; margin-bottom: .6rem; font-size: .95rem;
+  }
+  .facts b, .howto b { display: block; margin-bottom: .2rem; }
+  .facts span, .howto span { color: var(--muted); font-size: .9rem; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: .85em;
+         background: var(--bg); padding: .1rem .3rem; border-radius: 3px; }
+  footer { padding: 1.5rem 0 3rem; font-size: .85rem; color: var(--muted);
+           border-top: 1px solid var(--line); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important; transition-duration: .01ms !important;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="tag">Free · runs on your own computer</span>
+    <h1>Messy donation list in.<br>Personal thank-you emails out.</h1>
+    <p>
+      Here's the whole thing, start to finish. The program does every step
+      except the last one — pressing Send stays yours.
+    </p>
+  </header>
+
+  <section id="demo">
+    <ol class="steps" id="rail">
+      <li class="on"><button type="button" data-go="0">1 · Tidy the list</button></li>
+      <li><button type="button" data-go="1">2 · Write the letters</button></li>
+      <li><button type="button" data-go="2">3 · Open your email</button></li>
+      <li><button type="button" data-go="3">4 · Paste it in</button></li>
+      <li><button type="button" data-go="4">5 · You press Send</button></li>
+    </ol>
+
+    <div class="stage">
+
+      <!-- 1: the sheet -->
+      <div class="panel on" data-p="0">
+        <p class="caption" id="cap1">Your spreadsheet, exactly as people typed it.</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Name</th><th>Amount</th><th>Email</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="flagnote" id="flagnote" hidden>
+          <b>Alan Turing has no email.</b> He's held back for you to fix — never
+          half-written, never guessed at.
+        </div>
+      </div>
+
+      <!-- 2: the letter -->
+      <div class="panel" data-p="1">
+        <p class="caption">Each donor gets their own letter — your logo, your wording.</p>
+        <div class="letter">
+          <div class="head">
+            <div class="logo">H</div>
+            <div class="org">Harbor Street Food Bank</div>
+            <div class="slogan">Feeding our neighbours since 1998</div>
+          </div>
+          <p>Dear Ada Lovelace,</p>
+          <p>Thank you for your donation of $1,200.00 to Harbor Street Food Bank.</p>
+          <p><em id="typed"></em></p>
+          <p>With gratitude,<br>The Team</p>
+        </div>
+      </div>
+
+      <!-- 3: the send page -->
+      <div class="panel" data-p="2">
+        <p class="caption">
+          A page opens with all your donors. Click the button next to one.
+        </p>
+        <div class="sendrow" id="row-ada">
+          <span class="who"><b>Ada Lovelace</b><br><span class="em">ada@example.org</span></span>
+          <span>$1,200.00</span>
+          <button class="btn-blue" type="button" tabindex="-1">Copy letter &amp; open email</button>
+        </div>
+        <div class="sendrow">
+          <span class="who"><b>Bob Smith</b><br><span class="em">bob@example.org</span></span>
+          <span>$50.00</span>
+          <button class="btn-blue" type="button" tabindex="-1">Copy letter &amp; open email</button>
+        </div>
+        <div class="sendrow">
+          <span class="who"><b>Grace Hopper</b><br><span class="em">grace@example.org</span></span>
+          <span>$250.00</span>
+          <button class="btn-blue" type="button" tabindex="-1">Copy letter &amp; open email</button>
+        </div>
+      </div>
+
+      <!-- 4: compose window -->
+      <div class="panel" data-p="3">
+        <p class="caption" id="cap4">
+          Your email opens with the address and subject already filled in.
+        </p>
+        <div class="compose">
+          <div class="bar"><span>New Message</span><span>&times;</span></div>
+          <div class="f"><span class="k">To</span><span id="to"></span></div>
+          <div class="f"><span class="k">Subject</span><span id="subj"></span></div>
+          <div class="msg" id="msg">
+            <span class="empty">Message body — empty…</span>
+          </div>
+          <div class="foot"><button class="btn-blue" type="button" tabindex="-1">Send</button></div>
+        </div>
+        <span class="keys" id="keys" hidden>
+          You press <kbd>Ctrl</kbd> + <kbd>V</kbd> — the letter drops in, logo and all.
+        </span>
+      </div>
+
+      <!-- 5: the gate -->
+      <div class="panel" data-p="4">
+        <div class="sent-msg">
+          <div class="check" id="check">&check;</div>
+          <h3 id="gate-title">Now you press Send.</h3>
+          <p id="gate-text">
+            The program never sends anything by itself, and never asks for your
+            email password. You read it, you send it.
+          </p>
+          <p style="margin-top:1rem">
+            <button class="btn-blue" id="send" type="button"
+                    style="padding:.6rem 1.6rem;font-size:.95rem">Send to Ada</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-plain" id="back" type="button" disabled>&larr; Back</button>
+      <button class="btn-plain" id="next" type="button">Next &rarr;</button>
+      <button class="btn-plain" id="replay" type="button">Play it again</button>
+      <span class="status" id="status">Playing…</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Works with whatever email you already use</h2>
+    <p style="margin-bottom:1rem">
+      Gmail, Outlook, Yahoo — it doesn't matter. The tool fills in the message
+      for you and hands it to your normal email. It has no mail account of its
+      own, so there's no password to give it.
+    </p>
+    <ul class="facts">
+      <li><b>It tidies the list</b>
+        <span>Fixes CAPS, reads “twelve hundred” as $1,200, merges the same donor entered twice.</span></li>
+      <li><b>It matches the words to the gift</b>
+        <span>A $15 first-timer and a $1,200 regular do not get the same sentence.</span></li>
+      <li><b>It holds back anyone incomplete</b>
+        <span>Missing a name, amount, or email? Flagged for you, never sent.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>To use it yourself</h2>
+    <ul class="howto">
+      <li><b>1. Install Thonny</b>
+        <span>Free, from <code>thonny.org</code>. It's the only thing you install.</span></li>
+      <li><b>2. Press Play</b>
+        <span>It makes you a blank donor sheet. Type your donors in and save it.</span></li>
+      <li><b>3. Press Play again</b>
+        <span>Out come the letters and the emails, ready for you to send.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    Free, and it works offline — your donor list never leaves your computer.
+    Every donor shown here is made up.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var wait = function (ms) {
+    return new Promise(function (r) { setTimeout(r, reduced ? 0 : ms); });
+  };
+
+  var ROWS = [
+    { m: ["bob smith", "$50", "bob@ex.org"],
+      c: ["Bob Smith", "$50.00", "bob@ex.org"], f: [1, 1, 0] },
+    { m: ["Robert Smith", "50.00", "bob@ex.org"], merge: true },
+    { m: ["ADA LOVELACE", "twelve hundred", "ada@ex.org"],
+      c: ["Ada Lovelace", "$1,200.00", "ada@ex.org"], f: [1, 1, 0], rec: true },
+    { m: ["Grace Hopper", "250", "grace@ex.org"],
+      c: ["Grace Hopper", "$250.00", "grace@ex.org"], f: [0, 1, 0] },
+    { m: ["Alan Turing", "100", ""],
+      c: ["Alan Turing", "$100.00", "— none —"], flag: true }
+  ];
+
+  var NOTE = "Year after year you have given at a level that changes lives — and " +
+             "lives have in fact been changed, permanently, and for the better.";
+  var TO = "ada@example.org";
+  var SUBJ = "Thank you for your donation to Harbor Street Food Bank";
+  var LETTER_HTML =
+    '<div class="mini-logo">H</div>' +
+    '<div style="text-align:center;font-weight:700;margin-bottom:.5rem">' +
+    'Harbor Street Food Bank</div>' +
+    '<p style="margin-bottom:.5rem">Dear Ada Lovelace,</p>' +
+    '<p style="margin-bottom:.5rem">Thank you for your donation of <b>$1,200.00</b>…</p>' +
+    '<p><em>' + NOTE + '</em></p>';
+
+  var LAST = 4;
+
+  var el = function (id) { return document.getElementById(id); };
+  var rows = el("rows"), railItems = el("rail").children;
+  var panels = document.querySelectorAll(".panel");
+  var cap1 = el("cap1"), flagnote = el("flagnote"), typed = el("typed");
+  var rowAda = el("row-ada"), toEl = el("to"), subjEl = el("subj");
+  var msgEl = el("msg"), keys = el("keys"), cap4 = el("cap4");
+  var sendBtn = el("send"), check = el("check");
+  var gateTitle = el("gate-title"), gateText = el("gate-text");
+  var backBtn = el("back"), nextBtn = el("next"), status = el("status");
+
+  var step = 0;
+  var gen = 0;                 // bumped on every navigation; cancels stale animation
+  var mode = "auto";           // "auto" until the first run finishes, then "manual"
+
+  function stale(g) { return g !== gen; }
+
+  /* ---------- rendering each step ---------- */
+
+  function drawRows(clean) {
+    rows.innerHTML = "";
+    ROWS.forEach(function (r, i) {
+      if (clean && r.merge) return;             // the duplicate is already gone
+      var tr = document.createElement("tr");
+      tr.id = "tr" + i;
+      var vals = clean ? r.c : r.m;
+      vals.forEach(function (cell, c) {
+        var td = document.createElement("td");
+        td.textContent = cell === "" ? "—" : cell;
+        if (clean && r.f && r.f[c]) td.className = "fixed";
+        tr.appendChild(td);
+      });
+      if (clean && r.rec) tr.children[0].appendChild(pill("ok", "recurring"));
+      if (clean && r.flag) {
+        tr.className = "flag";
+        tr.children[0].appendChild(pill("warn", "held back"));
+      }
+      rows.appendChild(tr);
+    });
+  }
+
+  function pill(kind, text) {
+    var s = document.createElement("span");
+    s.className = "pill " + kind;
+    s.textContent = text;
+    return s;
+  }
+
+  function resetCompose() {
+    toEl.textContent = "";
+    subjEl.textContent = "";
+    toEl.className = "";
+    subjEl.className = "";
+    msgEl.innerHTML = '<span class="empty">Message body — empty…</span>';
+    msgEl.className = "msg";
+    keys.hidden = true;
+    cap4.textContent = "Your email opens with the address and subject already filled in.";
+  }
+
+  function resetGate() {
+    sendBtn.disabled = false;
+    sendBtn.textContent = "Send to Ada";
+    check.style.visibility = "hidden";
+    gateTitle.textContent = "Now you press Send.";
+    gateText.textContent = "The program never sends anything by itself, and never " +
+      "asks for your email password. You read it, you send it.";
+  }
+
+  /* Jump a step straight to its finished state (used when you skip ahead). */
+  function finish(n) {
+    if (n === 0) { drawRows(true); cap1.textContent = "4 donors ready · 1 held back";
+                   flagnote.hidden = false; }
+    if (n === 1) { typed.textContent = NOTE; }
+    if (n === 2) { rowAda.classList.add("active"); }
+    if (n === 3) {
+      toEl.textContent = TO; subjEl.textContent = SUBJ;
+      msgEl.innerHTML = LETTER_HTML; keys.hidden = false;
+      cap4.textContent = "One paste, and the whole letter lands — formatting and logo.";
+    }
+    if (n === 4) { resetGate(); }
+  }
+
+  /* Play a step's animation. Bails out the moment you navigate away. */
+  async function play(n, g) {
+    if (n === 0) {
+      drawRows(false);
+      flagnote.hidden = true;
+      cap1.textContent = "Your spreadsheet, exactly as people typed it.";
+      await wait(900); if (stale(g)) return;
+
+      cap1.textContent = "Fixing the typing, merging duplicates…";
+      for (var i = 0; i < ROWS.length; i++) {
+        var r = ROWS[i], tr = el("tr" + i);
+        if (!tr) continue;
+        if (r.merge) {
+          tr.classList.add("gone");
+          cap1.textContent = "Bob and Robert are the same person — merged.";
+          await wait(650); if (stale(g)) return;
+          continue;
+        }
+        for (var c = 0; c < 3; c++) {
+          tr.children[c].textContent = r.c[c];
+          if (r.f && r.f[c]) tr.children[c].classList.add("fixed");
+        }
+        if (r.rec) tr.children[0].appendChild(pill("ok", "recurring"));
+        if (r.flag) {
+          tr.classList.add("flag");
+          tr.children[0].appendChild(pill("warn", "held back"));
+        }
+        await wait(380); if (stale(g)) return;
+      }
+      cap1.textContent = "4 donors ready · 1 held back";
+      flagnote.hidden = false;
+
+    } else if (n === 1) {
+      typed.textContent = "";
+      await wait(400); if (stale(g)) return;
+      if (reduced) { typed.textContent = NOTE; return; }
+      for (var k = 1; k <= NOTE.length; k++) {
+        typed.textContent = NOTE.slice(0, k);
+        await wait(16); if (stale(g)) return;
+      }
+
+    } else if (n === 2) {
+      rowAda.classList.remove("active");
+      await wait(900); if (stale(g)) return;
+      rowAda.classList.add("active");
+
+    } else if (n === 3) {
+      resetCompose();
+      await wait(500); if (stale(g)) return;
+      toEl.textContent = TO; toEl.className = "filled";
+      await wait(650); if (stale(g)) return;
+      subjEl.textContent = SUBJ; subjEl.className = "filled";
+      await wait(900); if (stale(g)) return;
+      keys.hidden = false;
+      cap4.textContent = "One paste, and the whole letter lands — formatting and logo.";
+      await wait(1100); if (stale(g)) return;
+      msgEl.innerHTML = LETTER_HTML;
+      msgEl.className = "msg filled";
+
+    } else if (n === 4) {
+      resetGate();
+    }
+  }
+
+  /* ---------- navigation ---------- */
+
+  function paintRail(n) {
+    panels.forEach(function (p, i) { p.classList.toggle("on", i === n); });
+    for (var i = 0; i < railItems.length; i++) {
+      railItems[i].classList.toggle("on", i === n);
+      railItems[i].classList.toggle("done", i < n);
+    }
+    backBtn.disabled = (n === 0);
+    nextBtn.disabled = (n === LAST);
+  }
+
+  /* Go to a step. Everything before it is snapped to its finished state, so
+     jumping around never leaves the story half-told. */
+  function goTo(n, animate) {
+    gen++;
+    var g = gen;
+    step = n;
+    for (var i = 0; i < n; i++) finish(i);
+    paintRail(n);
+    if (animate) play(n, g);
+    else finish(n);
+  }
+
+  function takeControl(message) {
+    mode = "manual";
+    status.textContent = message;
+    status.classList.add("hand-off");
+  }
+
+  /* ---------- the opening run ---------- */
+
+  async function autoplay() {
+    gen++;
+    var g = gen;
+    mode = "auto";
+    status.classList.remove("hand-off");
+    status.textContent = "Playing…";
+    resetGate();
+
+    for (var n = 0; n <= 3; n++) {
+      step = n;
+      paintRail(n);
+      await play(n, g); if (stale(g)) return;
+      await wait(1400); if (stale(g)) return;
+    }
+    step = LAST;
+    paintRail(LAST);
+    status.textContent = "It stops here. Press Send when you're ready.";
+  }
+
+  /* After you send, it resets itself and hands you the controls. */
+  sendBtn.addEventListener("click", function () {
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Sent";
+    check.style.visibility = "visible";
+    gateTitle.textContent = "Sent — by you.";
+    gateText.textContent = "That's one donor thanked. Now do the next one.";
+
+    if (mode !== "auto") {
+      status.textContent = "Sent by you, not by the program.";
+      return;
+    }
+    status.classList.remove("hand-off");
+    status.textContent = "Sent by you. Starting over…";
+    var g = gen;
+    setTimeout(function () {
+      if (stale(g)) return;                 // you clicked something meanwhile
+      goTo(0, false);                       // back to the beginning, no animation
+      takeControl("Your turn — step through it with Next.");
+    }, 2200);
+  });
+
+  /* ---------- controls ---------- */
+
+  nextBtn.addEventListener("click", function () {
+    if (step < LAST) { goTo(step + 1, true); takeControlIfNeeded(); }
+  });
+  backBtn.addEventListener("click", function () {
+    if (step > 0) { goTo(step - 1, true); takeControlIfNeeded(); }
+  });
+  el("replay").addEventListener("click", autoplay);
+
+  Array.prototype.forEach.call(
+    document.querySelectorAll("[data-go]"),
+    function (b) {
+      b.addEventListener("click", function () {
+        goTo(Number(b.dataset.go), true);
+        takeControlIfNeeded();
+      });
+    }
+  );
+
+  function takeControlIfNeeded() {
+    if (mode === "auto") takeControl("You're driving now — use Next and Back.");
+    else { status.textContent = "Step " + (step + 1) + " of 5."; }
+  }
+
+  /* ---------- start once it scrolls into view ---------- */
+  var started = false;
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (entries, obs) {
+      if (entries[0].isIntersecting && !started) {
+        started = true; autoplay(); obs.disconnect();
+      }
+    }, { threshold: .25 }).observe(el("demo"));
+  } else {
+    autoplay();
+  }
+})();
+</script>
+</body>
+</html>
