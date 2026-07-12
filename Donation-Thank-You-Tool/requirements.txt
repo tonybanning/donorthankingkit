@@ -1,0 +1,9 @@
+# Pinned so a fresh clone installs the exact same versions.
+
+# Required. These two are all the FREE (default) mode needs.
+openpyxl==3.1.5
+python-docx==1.1.2
+
+# Optional. Only needed if you set an ANTHROPIC_API_KEY to use Claude for the
+# personalised sentences. Free mode never imports it.
+anthropic==0.116.0
